@@ -4,6 +4,16 @@ function run_image_labs(labs, interactive)
 if nargin < 1, labs = 1:5; end
 if nargin < 2, interactive = false; end
 validateattributes(labs, {'numeric'}, {'integer','>=',1,'<=',5});
+availableFonts = listfonts();
+if any(strcmpi(availableFonts,'Noto Sans CJK SC'))
+    fontName = 'Noto Sans CJK SC';
+elseif any(strcmpi(availableFonts,'Microsoft YaHei'))
+    fontName = 'Microsoft YaHei';
+else
+    fontName = get(groot,'defaultAxesFontName');
+end
+set(groot,'defaultAxesFontName',fontName,'defaultTextFontName',fontName, ...
+    'defaultLegendFontName',fontName);
 root = fullfile(fileparts(mfilename('fullpath')), 'results');
 steps = {@histogram_lab, @fourier_lab, @filter_lab, @edge_lab, @watershed_lab};
 for n = labs(:)'
@@ -21,8 +31,8 @@ end
 function metrics = histogram_lab(out, interactive)
 source = 'moon.tif';
 if interactive
-    [name,folder] = uigetfile({'*.png;*.jpg;*.tif;*.bmp','Image files'}, ...
-        'Choose an image, or cancel to use moon.tif');
+    [name,folder] = uigetfile({'*.png;*.jpg;*.tif;*.bmp','图像文件'}, ...
+        '选择测试图像，取消则使用内置月面图');
     if ~isequal(name,0), source = fullfile(folder,name); end
 end
 [input, map] = imread(source);
@@ -39,12 +49,12 @@ else
 end
 reference = histeq(I,256);
 after = imhist(J);
-f = make_figure('Histogram equalization',interactive);
+f = make_figure('直方图均匀化',interactive);
 tiledlayout(2,3,'Padding','compact','TileSpacing','compact');
-show_image(I,'Input'); show_image(J,'CDF equalization'); show_image(reference,'MATLAB histeq');
-nexttile; bar(0:255,before,1); xlim([0,255]); title('Input histogram'); xlabel('Gray level');
-nexttile; bar(0:255,after,1); xlim([0,255]); title('CDF histogram'); xlabel('Gray level');
-nexttile; bar(0:255,imhist(reference),1); xlim([0,255]); title('histeq histogram'); xlabel('Gray level');
+show_image(I,'原图'); show_image(J,'累积分布均衡化'); show_image(reference,'内置函数均衡化');
+nexttile; bar(0:255,before,1); xlim([0,255]); title('原图直方图'); xlabel('灰度级');
+nexttile; bar(0:255,after,1); xlim([0,255]); title('累积分布均衡化直方图'); xlabel('灰度级');
+nexttile; bar(0:255,imhist(reference),1); xlim([0,255]); title('内置函数均衡化直方图'); xlabel('灰度级');
 imwrite(I,fullfile(out,'input.png')); imwrite(J,fullfile(out,'equalized.png'));
 save_figure(f,out,'histograms.png',interactive);
 metrics = struct('input',source,'input_range',double([min(I(:)),max(I(:))]), ...
@@ -56,8 +66,8 @@ end
 function metrics = fourier_lab(out, interactive)
 [x,y] = meshgrid(0:255);
 inputs = {0.5+0.4*cos(2*pi*12*x/256), 0.5+0.4*cos(2*pi*20*y/256)};
-names = {'Vertical stripes','Horizontal stripes'};
-f = make_figure('Fourier transform',interactive);
+names = {'竖条纹','横条纹'};
+f = make_figure('傅立叶变换',interactive);
 tiledlayout(2,4,'Padding','compact','TileSpacing','compact');
 errors = zeros(1,2);
 peaks = zeros(2,2);
@@ -68,8 +78,8 @@ for k = 1:2
     magnitude = abs(Fc); magnitude(129,129) = 0;
     [~,index] = max(magnitude(:)); [row,col] = ind2sub(size(Fc),index);
     peaks(k,:) = [col-129,row-129];
-    show_image(I,names{k}); show_image(log1p(abs(F)),'Unshifted spectrum');
-    show_image(log1p(abs(Fc)),'Centered spectrum'); show_image(R,'Inverse reconstruction');
+    show_image(I,names{k}); show_image(log1p(abs(F)),'未中心化的频谱');
+    show_image(log1p(abs(Fc)),'中心化频谱'); show_image(R,'逆变换重建');
     imwrite(I,fullfile(out,sprintf('input%d.png',k)));
 end
 save_figure(f,out,'spectra.png',interactive);
@@ -86,17 +96,17 @@ I(x>=145 & x<=224 & y>=145 & y<=221) = 0.82;
 I(x>=38 & x<=115 & y>=158 & y<=222) = 0.43;
 I(x>=38 & x<=115 & y>=158 & y<=222 & mod(x,10)<5) = 0.63;
 inputs = {imnoise(I,'salt & pepper',0.06),imnoise(I,'gaussian',0,0.006)};
-titles = {'Salt and pepper','Gaussian noise'};
+titles = {'椒盐噪声','高斯噪声'};
 smooth = fspecial('average',[5 5]);
-f = make_figure('Image smoothing',interactive);
+f = make_figure('图像平滑',interactive);
 tiledlayout(2,5,'Padding','compact','TileSpacing','compact');
 scores = zeros(2,4);
 for k = 1:2
     N = inputs{k};
     outputs = {N,imfilter(N,smooth,'symmetric'),medfilt2(N,[5 5],'symmetric'), ...
         imgaussfilt(N,1,'FilterSize',5,'Padding','symmetric')};
-    show_image(I,'Clean image');
-    labels = {titles{k},'Mean 5x5','Median 5x5','Gaussian 5x5'};
+    show_image(I,'无噪声原图');
+    labels = {titles{k},'均值滤波 5×5','中值滤波 5×5','高斯滤波 5×5'};
     for j = 1:4
         scores(k,j) = 10*log10(1/mean((outputs{j}-I).^2,'all'));
         show_image(outputs{j},sprintf('%s | %.2f dB',labels{j},scores(k,j)));
@@ -119,11 +129,11 @@ I((x-178).^2+(y-83).^2<=37^2) = 0.58;
 kernel = [0 1 0; 1 -4 1; 0 1 0];
 [L,tl] = edge(I,'zerocross',[],kernel);
 response = imfilter(I,kernel,'replicate','conv');
-f = make_figure('Edge extraction',interactive);
+f = make_figure('图像边缘提取',interactive);
 tiledlayout(2,3,'Padding','compact','TileSpacing','compact');
-show_image(I,'Input'); show_image(R,'Roberts'); show_image(S,'Sobel');
-show_image(P,'Prewitt'); show_image(L,'Laplacian zero crossings');
-show_image(min(max(I-response,0),1),'Laplacian sharpening');
+show_image(I,'原图'); show_image(R,'罗伯特'); show_image(S,'索贝尔');
+show_image(P,'普瑞维特'); show_image(L,'拉普拉斯过零');
+show_image(min(max(I-response,0),1),'拉普拉斯锐化');
 imwrite(I,fullfile(out,'input.png'));
 save_figure(f,out,'edges.png',interactive);
 metrics = struct('operator_order',{{'Roberts','Sobel','Prewitt','Laplacian'}}, ...
@@ -147,23 +157,26 @@ markers = imextendedmax(D,3) & B;
 terrain = imimposemin(-D,markers | ~B);
 W = watershed(terrain);
 boundary = W==0 & B;
-labels = W;
-labels(~B) = 0; % Keep watershed labels only inside the objects.
-foregroundIDs = unique(labels(B & ~boundary));
+foregroundIDs = unique(W(markers));
 foregroundIDs(foregroundIDs==0) = [];
+isForeground = ismember(W,foregroundIDs);
+labels = W;
+labels(~B | ~isForeground) = 0;
+excludedBackgroundPixels = nnz(B & W>0 & ~isForeground);
 rgb = imoverlay(I,boundary,[1 0.1 0.1]);
-f = make_figure('Marker-controlled watershed',interactive);
+f = make_figure('标记控制分水岭',interactive);
 tiledlayout(2,3,'Padding','compact','TileSpacing','compact');
-show_image(I,'Input'); show_image(B,'Otsu + opening'); show_image(D,'Distance transform');
-show_image(markers,'Foreground markers');
-nexttile; imshow(label2rgb(labels,'jet','k','noshuffle')); title('Watershed labels');
-nexttile; imshow(rgb); title('Boundary overlay');
+show_image(I,'原图'); show_image(B,'大津阈值与开运算'); show_image(D,'距离变换');
+show_image(markers,'前景标记');
+nexttile; imshow(label2rgb(labels,'jet','k','noshuffle')); title('分水岭区域');
+nexttile; imshow(rgb); title('边界叠加');
 imwrite(I,fullfile(out,'input.png')); imwrite(rgb,fullfile(out,'boundary.png'));
 save_figure(f,out,'watershed.png',interactive);
 before = bwconncomp(B); seeds = bwconncomp(markers);
 metrics = struct('seed',52,'input_objects',size(circles,1),'components_before',before.NumObjects, ...
     'foreground_markers',seeds.NumObjects,'regions_after',numel(foregroundIDs), ...
-    'extended_maxima_height',3,'boundary_pixels',nnz(boundary));
+    'extended_maxima_height',3,'boundary_pixels',nnz(boundary), ...
+    'excluded_background_pixels',excludedBackgroundPixels);
 end
 
 function f = make_figure(name, interactive)
