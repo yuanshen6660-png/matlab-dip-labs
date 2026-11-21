@@ -1,0 +1,51 @@
+name: Run Digital Image Processing Labs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  matlab:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Check out MATLAB scripts
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up MATLAB and toolboxes
+        uses: matlab-actions/setup-matlab@v3
+        with:
+          release: R2025b
+          products: Image_Processing_Toolbox Deep_Learning_Toolbox
+
+      - name: Run image processing experiments
+        uses: matlab-actions/run-command@v3
+        with:
+          command: >-
+            run_image_labs;
+            for n=1:5, assert(isfile(fullfile('results',sprintf('lab%02d',n),'metrics.json'))); end
+
+      - name: Run MNIST training and evaluation
+        uses: matlab-actions/run-command@v3
+        with:
+          command: >-
+            run_mnist_lab(3);
+            assert(isfile(fullfile('results','lab06','metrics.json')))
+
+      - name: Save experiment results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: matlab-lab-results
+          path: |
+            results/**/*.json
+            results/**/*.png
+            results/**/*.csv
+          if-no-files-found: warn
+          retention-days: 7
