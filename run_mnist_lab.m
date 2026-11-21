@@ -2,6 +2,16 @@ function run_mnist_lab(epochs)
 % Compare one and two convolution blocks on the official MNIST split.
 if nargin < 1, epochs = 3; end
 validateattributes(epochs,{'numeric'},{'scalar','integer','positive'});
+availableFonts = listfonts();
+if any(strcmpi(availableFonts,'Noto Sans CJK SC'))
+    fontName = 'Noto Sans CJK SC';
+elseif any(strcmpi(availableFonts,'Microsoft YaHei'))
+    fontName = 'Microsoft YaHei';
+else
+    fontName = get(groot,'defaultAxesFontName');
+end
+set(groot,'defaultAxesFontName',fontName,'defaultTextFontName',fontName, ...
+    'defaultLegendFontName',fontName);
 root = fileparts(mfilename('fullpath'));
 out = fullfile(root,'results','lab06');
 data = fullfile(root,'data','MNIST');
@@ -63,7 +73,7 @@ mistakes = find(~isRight,6,'first');
 right = find(isRight,6,'first');
 for n = reshape([right;mistakes],1,[])
     nexttile; imshow(XTest(:,:,1,n));
-    title(sprintf('True %d | Pred %d',truthID(n)-1,guessID(n)-1));
+    title(sprintf('真实 %d｜预测 %d',truthID(n)-1,guessID(n)-1));
 end
 exportgraphics(f,fullfile(out,'predictions.png'),'Resolution',180); close(f);
 result = struct('matlab_release',version('-release'),'backend','CPU', ...
@@ -109,13 +119,13 @@ tiledlayout(2,2,'Padding','compact','TileSpacing','compact');
 for depth = 1:2
     tr = training{depth}; va = validation{depth};
     nexttile(depth); hold on;
-    plot(tr.Iteration,table_column(tr,{'Loss','TrainingLoss'}),'DisplayName','Training');
-    plot(va.Iteration,table_column(va,{'Loss','ValidationLoss'}),'-o','DisplayName','Validation');
-    title(sprintf('CNN-%d loss',depth)); xlabel('Iteration'); legend; grid on;
+    plot(tr.Iteration,table_column(tr,{'Loss','TrainingLoss'}),'DisplayName','训练');
+    plot(va.Iteration,table_column(va,{'Loss','ValidationLoss'}),'-o','DisplayName','验证');
+    title(sprintf('%d 层卷积模型损失',depth)); xlabel('迭代次数'); legend('Location','best'); grid on;
     nexttile(depth+2); hold on;
-    plot(tr.Iteration,table_column(tr,{'Accuracy','TrainingAccuracy'}),'DisplayName','Training');
-    plot(va.Iteration,table_column(va,{'Accuracy','ValidationAccuracy'}),'-o','DisplayName','Validation');
-    title(sprintf('CNN-%d accuracy',depth)); xlabel('Iteration'); ylabel('Accuracy (%)'); legend; grid on;
+    plot(tr.Iteration,table_column(tr,{'Accuracy','TrainingAccuracy'}),'DisplayName','训练');
+    plot(va.Iteration,table_column(va,{'Accuracy','ValidationAccuracy'}),'-o','DisplayName','验证');
+    title(sprintf('%d 层卷积模型准确率',depth)); xlabel('迭代次数'); ylabel('准确率（%）'); legend('Location','best'); grid on;
 end
 exportgraphics(f,fullfile(out,'training_curves.png'),'Resolution',180); close(f);
 end
